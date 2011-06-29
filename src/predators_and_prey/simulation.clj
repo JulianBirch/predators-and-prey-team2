@@ -2,7 +2,7 @@
 	(:use predators-and-prey.constants)
 	(:use predators-and-prey.collisions)
         (:use predators-and-prey.vectors)
-(:use [clojure.contrib.pprint :only [pprint]])
+(:use [clojure.pprint :only [pprint]])
         )
 
 (def predator {:max-velocity 7 :radius 20})
@@ -40,7 +40,7 @@
 (def flee -)
 (def target +)
 
-(defn move-towards [point animal strategy]
+(defn move-towards [animal point strategy]
   (let [difference (sub point [(:x animal) (:y animal)])
         unit-vec (unit difference)
         [vx vy] (mul (strategy (:max-velocity animal)) 
@@ -53,20 +53,27 @@
 (defn distance-between [animal1 animal2]
   (len (sub (animal-to-vec animal1) (animal-to-vec animal2))))
 
-(defn direction [strategy opponents animal state]
+(defn direction [animal strategy opponents state]   ; moved animal to be the "subject" of the direction command
+                                                    ; this is both more in line with oo practice and makes the -> work in think
+                                                    ; strictly speaking we're breaking LoD with passing in the current state
+                                                    ; but we'd need the whole state if we ever made predators hunt in packs
   (let [distance-to-target #(distance-between animal %)
         sorted #(sort-by distance-to-target %)
         desired-location (-> state opponents sorted first animal-to-vec)]
-    (move-towards desired-location animal strategy)))
+    (move-towards animal desired-location strategy)))
 
 (defn think [current-state]
-  (let [new-predators (map #(direction target :prey % current-state) (:predators current-state))
-	remaining-prey (filter (surviving? new-predators) (:prey current-state))
-        remaining-prey (map #(direction flee :predators % current-state) remaining-prey)
-        remaining-prey (map move remaining-prey)
-        new-predators (map move new-predators)]
-    (-> current-state
-        (assoc :predators new-predators :prey remaining-prey))))
+  (let [{:keys [prey predators]} current-state
+        new-predators (map #(-> % (direction target :prey current-state) move) predators)
+        _ (pprint new-predators)
+        ]
+    (assoc current-state
+           :predators new-predators
+           :prey (->>                                     ; N.B.  The rule seems to be "use -> for a singular object"
+                   prey                                   ; and use ->> for lists.  Arguably the parameters to map and filter are the wrong way around
+                   (filter (surviving? new-predators))
+                   (map #(-> % (direction flee :predators current-state) move))
+                   ))))
 
 (defn pulse []
 	(let [bounded-screen-size (- screen-size 20)]
