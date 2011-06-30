@@ -32,10 +32,12 @@
 	vx (:vx animal) vy (:vy animal)]
 	(assoc animal :x (mod (+ x vx) screen-size) :y (mod (+ y vy) screen-size))))
 
-(defn surviving? [predators]
-	(fn [prey]
-		(if (nil? (some #(collides? prey %) predators)) true false)))
-
+(defn surviving? [predators prey]
+  (not-any? #(collides? prey %) predators))  ; replaced function that returns a function with a simple function
+                                         ; the call to the function is modified to a partial application
+                                         ; I did this mostly because I think anything that ends with a question mark
+                                         ; should return a boolean
+                                         ; Also replaced some/nil?/if with not-any?
 
 (def flee -)
 (def target +)
@@ -64,14 +66,12 @@
 
 (defn think [current-state]
   (let [{:keys [prey predators]} current-state
-        new-predators (map #(-> % (direction target :prey current-state) move) predators)
-        _ (pprint new-predators)
-        ]
+        new-predators (map #(-> % (direction target :prey current-state) move) predators)]
     (assoc current-state
            :predators new-predators
            :prey (->>                                     ; N.B.  The rule seems to be "use -> for a singular object"
                    prey                                   ; and use ->> for lists.  Arguably the parameters to map and filter are the wrong way around
-                   (filter (surviving? new-predators))
+                   (filter #(surviving? new-predators %))
                    (map #(-> % (direction flee :predators current-state) move))
                    ))))
 
