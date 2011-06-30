@@ -5,8 +5,8 @@
 (:use [clojure.pprint :only [pprint]])
         )
 
-(def predator {:max-velocity 7 :radius 20})
-(def prey {:max-velocity 4 :radius 10})
+(def predator {:max-velocity 8 :radius 20})
+(def prey {:max-velocity 5 :radius 10})
 
 (def animals (atom {}))
 
@@ -52,17 +52,32 @@
 (defn animal-to-vec [{:keys [x y]}]
   [x y])
 
-(defn distance-between [animal1 animal2]
-  (len (sub (animal-to-vec animal1) (animal-to-vec animal2))))
+(defn desired-location [animal opponent-positions]  ; Split this out, it was getting too complex for "direction"
+  (let [my-position (animal-to-vec animal)
+        distance-to-target #(len (sub my-position %))
+        offsets [(- screen-size) 0 screen-size]     ; you could be aiming to wrap around the screen
+        possible-targets (for [[x y] opponent-positions
+                               xO offsets
+                               yO offsets]
+                           [(+ x xO) (+ y yO)])      ; these are all of the locations of the opponents assuming the grid was tiled
+                                                    ; this handles the border issue
+        ; desired-location (-> state opponents sorted first animal-to-vec)]
+        ; sorted #(sort-by distance-to-target %)
+  ]
+  ((partial apply min-key distance-to-target) possible-targets)))
+                           ; min-key is obviously preferable to calling sort and then first
+                           ; (not that it was obvious to me when we were coding it)
+                           ; but the syntax is horrible.  Anyone got a better technique than "partial apply"?
 
 (defn direction [animal strategy opponents state]   ; moved animal to be the "subject" of the direction command
                                                     ; this is both more in line with oo practice and makes the -> work in think
                                                     ; strictly speaking we're breaking LoD with passing in the current state
                                                     ; but we'd need the whole state if we ever made predators hunt in packs
-  (let [distance-to-target #(distance-between animal %)
-        sorted #(sort-by distance-to-target %)
-        desired-location (-> state opponents sorted first animal-to-vec)]
-    (move-towards animal desired-location strategy)))
+  (let [opponent-positions (->> state opponents (map animal-to-vec))
+        target-point (if (empty? opponent-positions)
+                        [(/ screen-size 2) (/ screen-size 2)]  ; this fixes the null reference exception that everyone enjoyed watching ;)
+                        (desired-location animal opponent-positions))]
+    (move-towards animal target-point strategy)))
 
 (defn think [current-state]
   (let [{:keys [prey predators]} current-state
